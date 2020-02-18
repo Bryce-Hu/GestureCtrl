@@ -19,7 +19,7 @@ import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.Button;
+import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -242,7 +242,7 @@ public class MainActivity extends AppCompatActivity {
       }
     }.start();
     //监听连接按键
-    Button bleConnect = findViewById(R.id.btnBLE);
+    ImageView bleConnect = findViewById(R.id.btnBLE);
     bleConnect.setOnClickListener(v -> bleConnecting());
   }
 
