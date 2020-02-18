@@ -54,7 +54,7 @@ public class MainActivity extends AppCompatActivity {
   private static final String OUTPUT_VIDEO_STREAM_NAME = "output_video";
   private static final String OUTPUT_HAND_PRESENCE_STREAM_NAME = "hand_presence";
   private static final String OUTPUT_LANDMARKS_STREAM_NAME = "hand_landmarks";
-  private static final CameraHelper.CameraFacing CAMERA_FACING = CameraHelper.CameraFacing.BACK;
+  private static final CameraHelper.CameraFacing CAMERA_FACING = CameraHelper.CameraFacing.FRONT;
   // 垂直翻转相机预览帧，然后将它们发送到FrameProcessor中以在MediaPipe图形中进行处理，
   // 并在处理后的帧显示时将它们翻转回来。这是必需的，因为OpenGL表示图像，假设图像原点
   // 在左下角，而MediaPipe通常假设图像原点在左上角。
@@ -212,16 +212,10 @@ public class MainActivity extends AppCompatActivity {
                         + df.format(landmark.getY())
                         + ")\n";
       }
-      fLandmarkString +=
-              "["
-                      + landmarkIndex
-                      + "]:("
-                      + df.format(landmark.getX())
-                      + ","
-                      + df.format(landmark.getY())
-                      + ")\n";
+      fLandmarkString += "(" + df.format(landmark.getX()) + "," + df.format(landmark.getY()) + ")";
       ++landmarkIndex;
     }
+    fLandmarkString = "#" + fLandmarkString + "!\n";
     return landmarksString;
   }
 
@@ -471,8 +465,8 @@ public class MainActivity extends AppCompatActivity {
       for (i = 0; i < bos.length; i++) {
         if (bos[i] == 0x0a) n++;
       }
-      byte[] bos_new = new byte[bos.length + n];      /**/
-      n = 0;                                          /**/
+      byte[] bos_new = new byte[bos.length + n];
+      n = 0;
       for (i = 0; i < bos.length; i++) { //手机中换行为0a,将其改为0d 0a后再发送
         if (bos[i] == 0x0a) {
           bos_new[n] = 0x0d;
