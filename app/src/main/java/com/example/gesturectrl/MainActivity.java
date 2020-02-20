@@ -63,27 +63,29 @@ public class MainActivity extends AppCompatActivity {
   private final static int REQUEST_CONNECT_DEVICE = 1;    //宏定义查询设备句柄
   private final static String MY_UUID = "00001101-0000-1000-8000-00805F9B34FB";   //SPP服务UUID号
   private final static String noneHandDataString = //没有手掌数据
-          "[0]:(0.0000,0.0000)\n" +
-                  "[1]:(0.0000,0.0000)\n" +
-                  "[2]:(0.0000,0.0000)\n" +
-                  "[3]:(0.0000,0.0000)\n" +
-                  "[4]:(0.0000,0.0000)\n" +
-                  "[5]:(0.0000,0.0000)\n" +
-                  "[6]:(0.0000,0.0000)\n" +
-                  "[7]:(0.0000,0.0000)\n" +
-                  "[8]:(0.0000,0.0000)\n" +
-                  "[9]:(0.0000,0.0000)\n" +
-                  "[10]:(0.0000,0.0000)\n" +
-                  "[11]:(0.0000,0.0000)\n" +
-                  "[12]:(0.0000,0.0000)\n" +
-                  "[13]:(0.0000,0.0000)\n" +
-                  "[14]:(0.0000,0.0000)\n" +
-                  "[15]:(0.0000,0.0000)\n" +
-                  "[16]:(0.0000,0.0000)\n" +
-                  "[17]:(0.0000,0.0000)\n" +
-                  "[18]:(0.0000,0.0000)\n" +
-                  "[19]:(0.0000,0.0000)\n" +
-                  "[20]:(0.0000,0.0000)\n";
+          "#" +
+                  "(0.0000,0.0000)" +
+                  "(0.0000,0.0000)" +
+                  "(0.0000,0.0000)" +
+                  "(0.0000,0.0000)" +
+                  "(0.0000,0.0000)" +
+                  "(0.0000,0.0000)" +
+                  "(0.0000,0.0000)" +
+                  "(0.0000,0.0000)" +
+                  "(0.0000,0.0000)" +
+                  "(0.0000,0.0000)" +
+                  "(0.0000,0.0000)" +
+                  "(0.0000,0.0000)" +
+                  "(0.0000,0.0000)" +
+                  "(0.0000,0.0000)" +
+                  "(0.0000,0.0000)" +
+                  "(0.0000,0.0000)" +
+                  "(0.0000,0.0000)" +
+                  "(0.0000,0.0000)" +
+                  "(0.0000,0.0000)" +
+                  "(0.0000,0.0000)" +
+                  "(0.0000,0.0000)" +
+                  "\n";
   private static String fLandmarkString = "";  //发送数据缓存
   private static String fLandmarkString_Last = "";  //上次发送数据缓存
 
@@ -103,11 +105,11 @@ public class MainActivity extends AppCompatActivity {
   Thread sendThread = new Thread() {
     public void run() {
       while (_socket != null) {
-        if (!fLandmarkString.equals(noneHandDataString)) {  //检测到了手掌
-          if (!fLandmarkString.equals(fLandmarkString_Last)) {//检测到了数据变化
+        if (fLandmarkString.startsWith("#") && fLandmarkString.endsWith("\n") &&  //检测数据完整性
+                !fLandmarkString.equals(noneHandDataString) &&  //检测非空数据
+                !fLandmarkString.equals(fLandmarkString_Last)) {  //检测手掌变化
             sendHandData();
             fLandmarkString_Last = fLandmarkString; //缓存上次发送数据
-          }
         }
         try {
           Thread.sleep(200);
@@ -215,7 +217,7 @@ public class MainActivity extends AppCompatActivity {
       fLandmarkString += "(" + df.format(landmark.getX()) + "," + df.format(landmark.getY()) + ")";
       ++landmarkIndex;
     }
-    fLandmarkString = "#" + fLandmarkString + "!\n";
+    fLandmarkString = "#" + fLandmarkString + "\n";
     return landmarksString;
   }
 
@@ -456,13 +458,13 @@ public class MainActivity extends AppCompatActivity {
 
   //发送数据
   private void sendHandData() {
-    int i;
-    int n = 0;
+/*    int i;
+    int n = 0;*/
     try {
       OutputStream os = _socket.getOutputStream();   //蓝牙连接输出流
       byte[] bos = fLandmarkString.getBytes();
       /*-***手机中的换行0x0a，变为回车换行0x0d，0x0a***-*/
-      for (i = 0; i < bos.length; i++) {
+/*      for (i = 0; i < bos.length; i++) {
         if (bos[i] == 0x0a) n++;
       }
       byte[] bos_new = new byte[bos.length + n];
@@ -476,9 +478,9 @@ public class MainActivity extends AppCompatActivity {
           bos_new[n] = bos[i];
         }
         n++;
-      }
+      }*/
       /*-**********************************************-*/
-      os.write(bos_new);
+      os.write(bos);
     } catch (IOException ignored) {
     }
   }
