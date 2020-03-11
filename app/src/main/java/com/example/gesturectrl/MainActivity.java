@@ -59,66 +59,6 @@ public class MainActivity extends AppCompatActivity {
   // 并在处理后的帧显示时将它们翻转回来。这是必需的，因为OpenGL表示图像，假设图像原点
   // 在左下角，而MediaPipe通常假设图像原点在左上角。
   private static final boolean FLIP_FRAMES_VERTICALLY = true;
-  /*---------------------------------------蓝牙---------------------------------------------------*/
-  private final static int REQUEST_CONNECT_DEVICE = 1;    //宏定义查询设备句柄
-  private final static String MY_UUID = "00001101-0000-1000-8000-00805F9B34FB";   //SPP服务UUID号
-  private final static String noneHandDataString = //没有手掌数据
-          "#" +
-                  "(0.0000,0.0000)" +
-                  "(0.0000,0.0000)" +
-                  "(0.0000,0.0000)" +
-                  "(0.0000,0.0000)" +
-                  "(0.0000,0.0000)" +
-                  "(0.0000,0.0000)" +
-                  "(0.0000,0.0000)" +
-                  "(0.0000,0.0000)" +
-                  "(0.0000,0.0000)" +
-                  "(0.0000,0.0000)" +
-                  "(0.0000,0.0000)" +
-                  "(0.0000,0.0000)" +
-                  "(0.0000,0.0000)" +
-                  "(0.0000,0.0000)" +
-                  "(0.0000,0.0000)" +
-                  "(0.0000,0.0000)" +
-                  "(0.0000,0.0000)" +
-                  "(0.0000,0.0000)" +
-                  "(0.0000,0.0000)" +
-                  "(0.0000,0.0000)" +
-                  "(0.0000,0.0000)" +
-                  "\n";
-  private static String fLandmarkString = "";  //发送数据缓存
-  private static String fLandmarkString_Last = "";  //上次发送数据缓存
-
-  static {
-    // 加载必要的本地库
-    System.loadLibrary("mediapipe_jni");
-    System.loadLibrary("opencv_java3");
-  }
-
-  final int MY_PERMISSION_ACCESS_COARSE_LOCATION = 11;
-  final int MY_PERMISSION_ACCESS_FINE_LOCATION = 12;
-  BluetoothDevice _device = null;     //蓝牙设备
-  BluetoothSocket _socket = null;      //蓝牙通信socket
-  volatile boolean bRun = true;
-  boolean bThread = false;
-  //发送数据线程
-  Thread sendThread = new Thread() {
-    public void run() {
-      while (_socket != null) {
-        if (fLandmarkString.startsWith("#") && fLandmarkString.endsWith("\n") &&  //检测数据完整性
-                !fLandmarkString.equals(noneHandDataString) &&  //检测非空数据
-                !fLandmarkString.equals(fLandmarkString_Last)) {  //检测手掌变化
-            sendHandData();
-            fLandmarkString_Last = fLandmarkString; //缓存上次发送数据
-        }
-        try {
-          Thread.sleep(200);
-        } catch (InterruptedException e) {
-          e.printStackTrace();
-        }
-      }
-    }
-  };
   // 访问相机预览帧。
   private SurfaceTexture previewFrameTexture;
   // 显示由 MediaPipe 图形处理的相机预览帧。
@@ -131,95 +71,35 @@ public class MainActivity extends AppCompatActivity {
   private ExternalTextureConverter converter;
   // CameraX 是新增库。利用该库，可以更轻松地向应用添加相机功能。
   private CameraXPreviewHelper cameraHelper;
+
+  // 加载必要的本地库
+  static {
+    System.loadLibrary("mediapipe_jni");
+    System.loadLibrary("opencv_java3");
+  }
+
+  private static String fLandmarkString = "";  //手掌数据
+  private static String fLandmarkString_Last = "";  //上次的手掌数据
+  private final static String noneHandDataString = //没有手掌数据
+          "#"
+                  + "(0.0000,0.0000)" + "(0.0000,0.0000)" + "(0.0000,0.0000)" + "(0.0000,0.0000)" + "(0.0000,0.0000)"
+                  + "(0.0000,0.0000)" + "(0.0000,0.0000)" + "(0.0000,0.0000)" + "(0.0000,0.0000)" + "(0.0000,0.0000)"
+                  + "(0.0000,0.0000)" + "(0.0000,0.0000)" + "(0.0000,0.0000)" + "(0.0000,0.0000)" + "(0.0000,0.0000)"
+                  + "(0.0000,0.0000)" + "(0.0000,0.0000)" + "(0.0000,0.0000)" + "(0.0000,0.0000)" + "(0.0000,0.0000)"
+                  + "(0.0000,0.0000)"
+                  + "\n";
+
+  private final static int REQUEST_CONNECT_DEVICE = 1;    //宏定义查询设备句柄
+  private final static String MY_UUID = "00001101-0000-1000-8000-00805F9B34FB";   //SPP服务UUID号
+  final int MY_PERMISSION_ACCESS_COARSE_LOCATION = 11;
+  final int MY_PERMISSION_ACCESS_FINE_LOCATION = 12;
+  BluetoothDevice _device = null;     //蓝牙设备
+  BluetoothSocket _socket = null;      //蓝牙通信socket
+  boolean bThread = false;
   private InputStream is;    //输入流，用来接收蓝牙数据
   private String smsg = "";    //显示用数据缓存
-  //消息处理队列
-  @SuppressLint("HandlerLeak")
-  Handler handler = new Handler() {
-    public void handleMessage(@NonNull Message msg) {
-      super.handleMessage(msg);
-      TextView gesture = findViewById(R.id.gesture);
-      gesture.setText(smsg);   //显示数据
-      smsg = "";
-    }
-  };
-  //接收数据线程
-  Thread readThread = new Thread() {
-    public void run() {
-      int i, n, num;
-      byte[] buffer = new byte[1024];
-      byte[] buffer_new = new byte[1024];
-      bRun = true;
-      //接收线程
-      while (true) {
-        try {
-          while (0 == is.available()) {
-            do {
-              if (bRun) break;
-            } while (true);
-          }
-          do {//短时间没有数据才跳出进行显示
-            if (!bThread) return;//跳出循环
-            num = is.read(buffer);         //读入数据
-            n = 0;
-            for (i = 0; i < num; i++) {
-              if ((buffer[i] == 0x0d) && (buffer[i + 1] == 0x0a)) {
-                buffer_new[n] = 0x0a;
-                i++;
-              } else {
-                buffer_new[n] = buffer[i];
-              }
-              n++;
-            }
-            String str = new String(buffer_new, 0, n);
-            smsg = smsg + str;   //写入接收缓存
-            try {
-              Thread.sleep(10);
-            } catch (InterruptedException e) {
-              e.printStackTrace();
-            }
-          } while (is.available() != 0);
-          handler.sendMessage(handler.obtainMessage());//发送显示消息，进行显示刷新
-        } catch (IOException ignored) {
-        }
-      }
-    }
-  };
   //获取蓝牙适配器
   private BluetoothAdapter _bluetooth = BluetoothAdapter.getDefaultAdapter();
-
-  // 字符串格式化，输出日志，用于调试
-  private static String getLandmarksDebugString(NormalizedLandmarkList landmarks) {
-    int landmarkIndex = 0;
-    String landmarksString = "";
-    fLandmarkString = "";
-    DecimalFormat df = new DecimalFormat("#0.0000"); //保留四位小数
-    for (NormalizedLandmark landmark : landmarks.getLandmarkList()) {
-      if (landmarkIndex < 10) {
-        landmarksString +=
-                "Landmark[0"
-                        + landmarkIndex
-                        + "]: ("
-                        + df.format(landmark.getX())
-                        + ", "
-                        + df.format(landmark.getY())
-                        + ")\n";
-      } else {
-        landmarksString +=
-                "Landmark["
-                        + landmarkIndex
-                        + "]: ("
-                        + df.format(landmark.getX())
-                        + ", "
-                        + df.format(landmark.getY())
-                        + ")\n";
-      }
-      fLandmarkString += "(" + df.format(landmark.getX()) + "," + df.format(landmark.getY()) + ")";
-      ++landmarkIndex;
-    }
-    fLandmarkString = "#" + fLandmarkString + "\n";
-    return landmarksString;
-  }
 
   @Override
   protected void onCreate(Bundle savedInstanceState) {
@@ -272,17 +152,31 @@ public class MainActivity extends AppCompatActivity {
     converter.close();  //停止转换
     if (_socket != null)  //关闭连接socket
       try {
+        is.close();
         _socket.close();
+        _socket = null;
       } catch (IOException ignored) {
       }
-//    _bluetooth.disable();  //关闭蓝牙服务
   }
 
-  @Override // 权限申请结果回调函数
+  // 权限申请结果回调函数
+  @Override
   public void onRequestPermissionsResult(
           int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
     super.onRequestPermissionsResult(requestCode, permissions, grantResults);
     PermissionHelper.onRequestPermissionsResult(requestCode, permissions, grantResults);
+  }
+
+  // 打开相机
+  private void startCamera() {
+    cameraHelper = new CameraXPreviewHelper();
+    cameraHelper.setOnCameraStartedListener(
+            surfaceTexture -> {
+              previewFrameTexture = surfaceTexture;
+              // 使显示视图可见，以开始显示预览。这就触发了SurfaceHolder。回调添加到previewDisplayView。
+              previewDisplayView.setVisibility(View.VISIBLE);
+            });
+    cameraHelper.startCamera(this, CAMERA_FACING, /*surfaceTexture=*/ null);
   }
 
   // 裁剪预览图形
@@ -318,18 +212,6 @@ public class MainActivity extends AppCompatActivity {
                         processor.getVideoSurfaceOutput().setSurface(null);
                       }
                     });
-  }
-
-  // 打开相机
-  private void startCamera() {
-    cameraHelper = new CameraXPreviewHelper();
-    cameraHelper.setOnCameraStartedListener(
-            surfaceTexture -> {
-              previewFrameTexture = surfaceTexture;
-              // 使显示视图可见，以开始显示预览。这就触发了SurfaceHolder。回调添加到previewDisplayView。
-              previewDisplayView.setVisibility(View.VISIBLE);
-            });
-    cameraHelper.startCamera(this, CAMERA_FACING, /*surfaceTexture=*/ null);
   }
 
   //手势跟踪
@@ -374,13 +256,45 @@ public class MainActivity extends AppCompatActivity {
 
                 TextView landmarksData = findViewById(R.id.landmarksData);
                 landmarksData.setText(getLandmarksDebugString(landmarks));  //屏幕显示标点数据
-                //gesture.setText("Gesture");  //屏幕显示手势
               } catch (InvalidProtocolBufferException e) {
                 Log.e(TAG, "Couldn't Exception received - " + e);
               }
             });
 
     PermissionHelper.checkAndRequestCameraPermissions(this);    //检查和申请相机权限
+  }
+
+  // 字符串格式化，输出日志，用于调试
+  private static String getLandmarksDebugString(NormalizedLandmarkList landmarks) {
+    int landmarkIndex = 0;
+    String landmarksString = "";
+    fLandmarkString = "";
+    DecimalFormat df = new DecimalFormat("#0.0000"); //保留四位小数
+    for (NormalizedLandmark landmark : landmarks.getLandmarkList()) {
+      if (landmarkIndex < 10) {
+        landmarksString +=
+                "Landmark[0"
+                        + landmarkIndex
+                        + "]: ("
+                        + df.format(landmark.getX())
+                        + ", "
+                        + df.format(landmark.getY())
+                        + ")\n";
+      } else {
+        landmarksString +=
+                "Landmark["
+                        + landmarkIndex
+                        + "]: ("
+                        + df.format(landmark.getX())
+                        + ", "
+                        + df.format(landmark.getY())
+                        + ")\n";
+      }
+      fLandmarkString += "(" + df.format(landmark.getX()) + "," + df.format(landmark.getY()) + ")";
+      ++landmarkIndex;
+    }
+    fLandmarkString = "#" + fLandmarkString + "\n";
+    return landmarksString;
   }
 
   //连接蓝牙
@@ -395,14 +309,10 @@ public class MainActivity extends AppCompatActivity {
       startActivityForResult(serverIntent, REQUEST_CONNECT_DEVICE);  //设置返回宏定义
     } else { //关闭连接socket
       try {
-        bRun = false;
-        Thread.sleep(2000);
         is.close();
         _socket.close();
         _socket = null;
       } catch (IOException ignored) {
-      } catch (InterruptedException e) {
-        e.printStackTrace();
       }
     }
   }
@@ -438,50 +348,84 @@ public class MainActivity extends AppCompatActivity {
           return;
         }
 
-        //打开接收线程
+        //打开发送、接收线程
         try {
           is = _socket.getInputStream();   //得到蓝牙数据输入流
-        } catch (IOException e) {
-          Toast.makeText(this, "接收数据失败！", Toast.LENGTH_SHORT).show();
-          return;
-        }
-        if (!bThread) {
           sendThread.start();
           readThread.start();
-          bThread = true;
-        } else {
-          bRun = true;
+        } catch (IOException e) {
+          Toast.makeText(this, "接收数据失败！", Toast.LENGTH_SHORT).show();
         }
       }
     }
   }
 
-  //发送数据
-  private void sendHandData() {
-/*    int i;
-    int n = 0;*/
-    try {
-      OutputStream os = _socket.getOutputStream();   //蓝牙连接输出流
-      byte[] bos = fLandmarkString.getBytes();
-      /*-***手机中的换行0x0a，变为回车换行0x0d，0x0a***-*/
-/*      for (i = 0; i < bos.length; i++) {
-        if (bos[i] == 0x0a) n++;
-      }
-      byte[] bos_new = new byte[bos.length + n];
-      n = 0;
-      for (i = 0; i < bos.length; i++) { //手机中换行为0a,将其改为0d 0a后再发送
-        if (bos[i] == 0x0a) {
-          bos_new[n] = 0x0d;
-          n++;
-          bos_new[n] = 0x0a;
-        } else {
-          bos_new[n] = bos[i];
+  //发送数据线程
+  Thread sendThread = new Thread() {
+    public void run() {
+      while (_socket != null) {
+        if (fLandmarkString.startsWith("#") && fLandmarkString.endsWith("\n") &&  //检测数据完整性
+                !fLandmarkString.equals(noneHandDataString) &&  //检测非空数据
+                !fLandmarkString.equals(fLandmarkString_Last)) {  //检测手掌变化
+          //发送数据
+          try {
+            OutputStream os = _socket.getOutputStream();   //蓝牙连接输出流
+            byte[] bos = fLandmarkString.getBytes();
+            os.write(bos);
+          } catch (IOException ignored) {
+          }
+          fLandmarkString_Last = fLandmarkString; //缓存上次发送数据
         }
-        n++;
-      }*/
-      /*-**********************************************-*/
-      os.write(bos);
-    } catch (IOException ignored) {
+        try {
+          Thread.sleep(200);
+        } catch (InterruptedException e) {
+          e.printStackTrace();
+        }
+      }
     }
-  }
+  };
+
+  //接收数据线程
+  Thread readThread = new Thread() {
+    public void run() {
+      int bytes = 0, ch;
+      byte[] buffer = new byte[1024];
+      byte[] clearArray = new byte[1024];
+      //接收线程
+      while (true) {
+        try {
+          if (is.available() != 0) {//有数据读取
+            System.arraycopy(clearArray, 0, buffer, 0, bytes);  //buffer数组清零
+            bytes = 0;
+
+            while ((ch = is.read()) != '\n') {
+              if (ch != -1) {
+                buffer[bytes] = (byte) ch;  //将读取到的字符写入
+                bytes++;
+              }
+            }
+            handler.obtainMessage(0, bytes, -1, buffer).sendToTarget();//发送显示消息，进行显示刷新
+          }
+        } catch (IOException e) {
+          Log.e("readThread", "BLE lost connection!");
+          break;
+        }
+      }
+    }
+  };
+
+  //消息处理队列
+  @SuppressLint("HandlerLeak")
+  Handler handler = new Handler() {
+    public void handleMessage(@NonNull Message msg) {
+      super.handleMessage(msg);
+      if (msg.what == 0) {
+        TextView gesture = findViewById(R.id.gesture);
+        gesture.setText(new String((byte[]) msg.obj));   //显示数据
+      }
+    }
+  };
+
+
 }
+
