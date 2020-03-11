@@ -95,9 +95,7 @@ public class MainActivity extends AppCompatActivity {
   final int MY_PERMISSION_ACCESS_FINE_LOCATION = 12;
   BluetoothDevice _device = null;     //蓝牙设备
   BluetoothSocket _socket = null;      //蓝牙通信socket
-  boolean bThread = false;
   private InputStream is;    //输入流，用来接收蓝牙数据
-  private String smsg = "";    //显示用数据缓存
   //获取蓝牙适配器
   private BluetoothAdapter _bluetooth = BluetoothAdapter.getDefaultAdapter();
 
